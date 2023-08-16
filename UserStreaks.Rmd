@@ -1,6 +1,8 @@
 ---
 title: "User Streaks"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 # Problem
@@ -12,7 +14,8 @@ In case of a tie, display all users with the top three longest streaks.
 
 ## Inputs
 
-```{r}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(tidyverse)
 user_streaks <- read_delim("~/Data Science/Exercises/Data/user_streaks.csv", delim = ',')
 user_streaks$date_visited <- as.Date(user_streaks$date_visited, format='%d/%m/%y')
 user_streaks
@@ -61,7 +64,7 @@ top_three
 ## R
 ### My solution
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 
 library(dplyr)
 
@@ -73,10 +76,5 @@ user_streaks$cs[is.na(user_streaks$cs)] = 0
 
 user_streaks %>% group_by(user_id) %>% reframe(cs2 = cumsum(cs), diff) %>% group_by(user_id, cs2) %>% summarize(streak_length=sum(diff[-1])) %>% group_by(user_id) %>% summarize(max_streak_length=max(streak_length)) %>% arrange(-max_streak_length) %>% head(3)
 
-                                                             
-                                                             
-                                                             
-
-#lag(user_streaks$date_visited)
 ```
 

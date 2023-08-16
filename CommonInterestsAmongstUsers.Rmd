@@ -1,38 +1,45 @@
 ---
 title: "Common Interests Amongst Users"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
+
+```{r warning=FALSE, include=FALSE}
+library(tidyverse)
+library(gtExtras)
+```
+
 
 # Problem
 Count the subpopulations across datasets. Assume that a subpopulation is a group of users sharing a common interest (ex: Basketball, Food). Output the percentage of overlapping interests for two posters along with those poster's IDs. Calculate the percentage from the number of poster's interests. The poster column in the dataset refers to the user that posted the comment.
 
 ## Inputs
 
-```{r R-Inputs}
-
+```{r R-Inputs, warning=FALSE}
 data_loc <- file.path("~/Data Science/Exercises/Data", "facebook_posts.csv")
 facebook_posts <- read.csv2(data_loc)
 facebook_posts <- facebook_posts %>% mutate(post_date=as.POSIXct(post_date))
+facebook_posts %>% gt::gt()
 
 ```
 
-```{python}
+```{python include=FALSE}
 import pandas as pd
 import numpy as np
 
 facebook_posts = pd.read_csv("~/Data Science/Exercises/Data/facebook_posts.csv", sep=";")
 facebook_posts['post_date'] = pd.to_datetime(facebook_posts['post_date'])
-facebook_posts
 ```
 
 ## Expected Output
 
-```{r}
+```{r echo=FALSE, warning=FALSE}
 overlap <- c(0.6, 0.6)
 poster1 <- c(2, 1)
 poster2 <- c(1, 2)
 solution <- data.frame(overlap, poster1, poster2)
-solution
+solution %>% gt::gt()
 ```
 
 
@@ -150,13 +157,13 @@ my_results <- poster_to_interests %>% cross_join(poster_to_interests) %>%
 
 my_results$overlap[is.nan(my_results$overlap)] <- 0
 
-my_results %>% select(poster.x, poster.y, overlap) %>% filter(overlap>0)
+my_results %>% select(poster.x, poster.y, overlap) %>% filter(overlap>0) %>% gt::gt()
 
 
 ```
 ### Their Solution
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 
 library(tidyverse)
 x = facebook_posts%>%
@@ -173,7 +180,7 @@ x%>%
     group_by(poster.x)%>%
     mutate(intersect_count = n(), overlap = intersect_count/all_count)%>%
     ungroup()%>%
-    distinct(poster1 = poster.x, poster2 = poster.y, overlap)
+    distinct(poster1 = poster.x, poster2 = poster.y, overlap) %>% gt::gt()
 
 
 ```
@@ -239,9 +246,5 @@ WHERE overlap > 0
 
 
 ### Their solution
-```{sql connection=conn}
 
-
-
-```
 
