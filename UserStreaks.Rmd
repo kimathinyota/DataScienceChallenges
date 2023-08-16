@@ -1,0 +1,82 @@
+---
+title: "User Streaks"
+output: html_notebook
+---
+
+# Problem
+
+Provided a table with user id and the dates they visited the platform, find the top 3 users with the longest continuous streak of visiting the platform as of August 10, 2022. Output the user ID and the length of the streak.
+
+In case of a tie, display all users with the top three longest streaks.
+
+
+## Inputs
+
+```{r}
+user_streaks <- read_delim("~/Data Science/Exercises/Data/user_streaks.csv", delim = ',')
+user_streaks$date_visited <- as.Date(user_streaks$date_visited, format='%d/%m/%y')
+user_streaks
+
+```
+
+
+# Solutions
+
+## Python
+
+
+### My solution
+
+```{python}
+import pandas as pd
+import numpy as np
+
+user_streaks = pd.read_csv("~/Data Science/Exercises/Data/user_streaks.csv")
+user_streaks.date_visited = pd.to_datetime(user_streaks.date_visited, dayfirst=True)
+
+user_streaks = user_streaks.sort_values(by=["user_id", "date_visited"]).reset_index()
+
+def getStreak(date_visited):
+  days = date_visited - date_visited.shift(1)
+  days = days[1:].dt.days.to_list()
+  dayDifMax = -1
+  s = 0
+  for d in days:
+    if d > 1:
+      dayDifMax = max(s, dayDifMax)
+      s = 0
+    else:
+      s += d
+  dayDifMax = max(s, dayDifMax)    
+  return dayDifMax
+
+
+top_three = user_streaks.groupby('user_id')['date_visited'].agg(getStreak).sort_values().iloc[::-1].iloc[:3].to_frame('streak_length')
+
+top_three
+
+
+```
+
+## R
+### My solution
+
+```{r}
+
+library(dplyr)
+
+
+user_streaks <- user_streaks %>% arrange(user_id, date_visited) %>% mutate(diff = if_else(user_id != lag(user_id), NA, date_visited - lag(date_visited))) %>% mutate(cs = if_else(diff > duration(day=1), 1, 0))
+
+user_streaks$cs[is.na(user_streaks$cs)] = 0
+
+
+user_streaks %>% group_by(user_id) %>% reframe(cs2 = cumsum(cs), diff) %>% group_by(user_id, cs2) %>% summarize(streak_length=sum(diff[-1])) %>% group_by(user_id) %>% summarize(max_streak_length=max(streak_length)) %>% arrange(-max_streak_length) %>% head(3)
+
+                                                             
+                                                             
+                                                             
+
+#lag(user_streaks$date_visited)
+```
+

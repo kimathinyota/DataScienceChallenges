@@ -1,0 +1,247 @@
+---
+title: "Common Interests Amongst Users"
+output: html_notebook
+---
+
+# Problem
+Count the subpopulations across datasets. Assume that a subpopulation is a group of users sharing a common interest (ex: Basketball, Food). Output the percentage of overlapping interests for two posters along with those poster's IDs. Calculate the percentage from the number of poster's interests. The poster column in the dataset refers to the user that posted the comment.
+
+## Inputs
+
+```{r R-Inputs}
+
+data_loc <- file.path("~/Data Science/Exercises/Data", "facebook_posts.csv")
+facebook_posts <- read.csv2(data_loc)
+facebook_posts <- facebook_posts %>% mutate(post_date=as.POSIXct(post_date))
+
+```
+
+```{python}
+import pandas as pd
+import numpy as np
+
+facebook_posts = pd.read_csv("~/Data Science/Exercises/Data/facebook_posts.csv", sep=";")
+facebook_posts['post_date'] = pd.to_datetime(facebook_posts['post_date'])
+facebook_posts
+```
+
+## Expected Output
+
+```{r}
+overlap <- c(0.6, 0.6)
+poster1 <- c(2, 1)
+poster2 <- c(1, 2)
+solution <- data.frame(overlap, poster1, poster2)
+solution
+```
+
+
+# Solutions
+
+
+## Python
+
+### My Solution
+
+```{python}
+# MY SOLUTION
+
+# Convert post_keywords from str to list
+
+facebook_posts2 = facebook_posts.copy()
+
+facebook_posts2['post_keywords_list'] = facebook_posts2.post_keywords.str[1:-1].str.split(',')
+
+# Explode list to elongate the data
+poster_to_interests = facebook_posts2.explode('post_keywords_list')
+
+# Set spam to NA (not an interest)
+poster_to_interests.post_keywords_list.loc[poster_to_interests.post_keywords_list == '#spam#'] = pd.NA
+
+# Group by poster and aggregate as a list (not including NAs)
+poster_to_interests = poster_to_interests.groupby('poster')['post_keywords_list'].agg(lambda series: list(series.dropna()))
+
+ptif = poster_to_interests.to_frame().reset_index()
+
+# Cross join so we can compare posters and their keywords to each other
+ptif = pd.merge(ptif, ptif, how="cross")
+
+# Want a function that will calculate the percentage of overlapping elements between list1 and list2
+def overlap(list1, list2):
+    combined = list1 + list2
+    if len(list1) == 0:
+        return 0
+    combined_set = set(combined)
+    return len(set(list1) & set(list2))/len(list1)
+    
+a = ['basketball', 'lebron_james', 'nba', 'spaghetti', 'food']
+b = ['basketball', 'lakers', 'nba', 'asparagus', 'food']
+
+ptif = ptif.loc[ptif.poster_x != ptif.poster_y]
+overlaps = ptif.apply(lambda series: overlap(series['post_keywords_list_x'], series['post_keywords_list_y']), axis=1)
+
+ptif['overlap'] = overlaps
+
+my_result = ptif[['poster_x', 'poster_y', 'overlap']].loc[ptif.overlap > 0]
+
+my_result
+```
+
+
+### stratascratch solution
+```{python}
+
+facebook_posts2 = facebook_posts.copy()
+
+facebook_posts2['post_keywords'] = facebook_posts2['post_keywords'].apply(
+    lambda x: x[1:-1].split(','))
+    
+result = facebook_posts2.groupby('poster')['post_keywords'].sum().reset_index()
+
+
+result['constant'] = [1] * result.shape[0]
+
+result = result.merge(result, on='constant')
+
+result = result[result['poster_x'] != result['poster_y']]
+
+
+result['intersection'] = [[]] * result.shape[0]
+
+result['total'] = result['post_keywords_x'].apply(lambda x: len(x))
+
+for i, r in result.iterrows():
+    result['intersection'].loc[i] = len(
+        list(set(r['post_keywords_y']) & set(r['post_keywords_x'])))
+
+
+result['overlap'] = result['intersection'] / result['total']
+
+
+result = result[['poster_x', 'poster_y', 'overlap']]
+result = result[result.overlap > 0]
+
+result
+
+```
+
+## R
+
+### My solution
+
+```{r}
+library(tidyverse)
+library(stringr)
+
+facebook_posts2 <- facebook_posts %>% mutate(post_keywords_list = str_split(str_sub(post_keywords, 2, -2), ","))
+
+poster_to_interests <- facebook_posts2 %>% 
+  group_by(poster) %>% 
+  reframe(interests =unlist(post_keywords_list, recursive = FALSE)) %>% 
+  distinct(.keep_all = TRUE)  %>% 
+  mutate(interests = if_else(interests=="#spam#", NA, interests)) %>% 
+  group_by(poster) %>% 
+  summarize(interests=list(unique(interests[!is.na(interests)])))
+
+my_results <- poster_to_interests %>% cross_join(poster_to_interests) %>% 
+  filter(poster.x != poster.y) %>% 
+  rowwise() %>% 
+  mutate(overlap = length(intersect(interests.x, interests.y))/length(interests.x))
+
+my_results$overlap[is.nan(my_results$overlap)] <- 0
+
+my_results %>% select(poster.x, poster.y, overlap) %>% filter(overlap>0)
+
+
+```
+### Their Solution
+
+```{r}
+
+library(tidyverse)
+x = facebook_posts%>%
+    select(poster, post_keywords)%>%
+    mutate(post_keywords = str_extract_all(post_keywords, '[a-z_]+'))%>%
+    unnest(post_keywords)
+
+x%>%
+    group_by(poster)%>%
+    mutate(all_count = n_distinct(post_keywords))%>%
+    ungroup()%>%
+    inner_join(x, by = 'post_keywords', keep = T)%>%
+    filter(poster.x != poster.y) %>%
+    group_by(poster.x)%>%
+    mutate(intersect_count = n(), overlap = intersect_count/all_count)%>%
+    ungroup()%>%
+    distinct(poster1 = poster.x, poster2 = poster.y, overlap)
+
+
+```
+
+## SQL
+```{r}
+library(odbc)
+library(DBI)
+library(tidyverse)
+conn <- dbConnect(drv = RSQLite::SQLite(),
+                  dbname = ":memory:")
+dbWriteTable(conn=conn,
+             name="facebook_posts",
+             value=facebook_posts)
+```
+
+
+### My Solution
+
+```{sql connection=conn}
+-- Convert post_keywords into keywords list
+WITH keywords(keywords, poster) AS (SELECT REPLACE(REPLACE(post_keywords, ']', ''), '[', ''), poster
+                            FROM facebook_posts),
+-- Find number of words for each keyword 
+     keywordsCount(keywords, word_count, poster) AS (SELECT keywords, 
+                                                   (1 + LENGTH(keywords)-LENGTH(REPLACE(keywords, ',', ''))) , poster
+                                            FROM keywords),
+                                            
+     --all_keywords(keywords, rest_word, startPos, counter) AS (SELECT keywords, )
+     all_keywords(keywords, rest_word, counter, wc, pos) AS (SELECT keywords, SUBSTRING(keywords, INSTR(keywords, ",")+1), 1, word_count, poster
+                                                        FROM keywordsCount
+                                                        UNION ALL
+                                                        SELECT rest_word, SUBSTRING(rest_word, INSTR(rest_word, ",")+1), counter + 1, wc, pos
+                                                        FROM all_keywords, keywordsCount
+                                                        WHERE counter < wc ),
+     temp(keyword, poster) AS (SELECT CASE WHEN counter=wc THEN keywords
+                                               ELSE REPLACE(keywords, ',' || rest_word, '')
+                                          END, pos
+                                   FROM all_keywords),
+                       
+     keyword_to_poster AS (SELECT DISTINCT keyword, poster FROM temp),
+     
+     posters AS (SELECT DISTINCT poster FROM keyword_to_poster),
+    
+     overlap AS (SELECT p1.poster AS posterx, p2.poster AS postery, (SELECT COUNT(*) FROM (SELECT keyword FROM keyword_to_poster WHERE keyword_to_poster.poster = p1.poster
+                                                                                           INTERSECT
+                                                                                           SELECT keyword FROM keyword_to_poster WHERE keyword_to_poster.poster = p2.poster)) AS total_overlap
+                 FROM posters AS p1, posters AS p2
+                 WHERE posterx != postery)
+
+SELECT posterx, postery, CAST(total_overlap AS double)/CAST(total_words AS double) AS overlap  FROM overlap
+LEFT JOIN
+(SELECT poster, COUNT(keyword) AS total_words FROM keyword_to_poster 
+ WHERE keyword != '#spam#'
+ GROUP BY poster) AS keywordC
+ON posterx = keywordC.poster
+WHERE overlap > 0
+
+
+
+
+```
+
+
+### Their solution
+```{sql connection=conn}
+
+
+
+```
+
